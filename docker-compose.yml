@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  promptforce-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "5000:5000"
+    environment:
+      - NODE_ENV=development
+      - PORT=5000
+      - MONGODB_URI=mongodb://mongodb:27017/promptforce
+      - JWT_SECRET=your-local-jwt-secret-key
+      - CLIENT_URL=http://localhost:3000
+    volumes:
+      - ./server/uploads:/app/uploads
+      - ./server/public:/app/public
+    depends_on:
+      - mongodb
+    networks:
+      - promptforce-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  mongodb:
+    image: mongo:6.0
+    container_name: promptforce-mongodb
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_DATABASE=promptforce
+    volumes:
+      - mongodb_data:/data/db
+      - ./server/scripts:/docker-entrypoint-initdb.d
+    networks:
+      - promptforce-network
+    restart: unless-stopped
+
+volumes:
+  mongodb_data:
+    driver: local
+
+networks:
+  promptforce-network:
+    driver: bridge 
