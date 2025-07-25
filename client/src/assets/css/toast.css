@@ -1,0 +1,66 @@
+/* Toast messages */
+.toast {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  max-width: 350px;
+  background-color: #fff;
+  color: #333;
+  padding: 12px 20px;
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 9999;
+  opacity: 0;
+  transform: translateY(-20px);
+  transition: all 0.3s ease;
+  font-size: 14px;
+}
+
+.toast.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.toast-success {
+  background-color: #4caf50;
+  color: white;
+  border-left: 4px solid #2e7d32;
+}
+
+.toast-error {
+  background-color: #f44336;
+  color: white;
+  border-left: 4px solid #c62828;
+}
+
+.toast-info {
+  background-color: #2196f3;
+  color: white;
+  border-left: 4px solid #1565c0;
+}
+
+/* Thêm style cho form auth */
+.form-input:focus {
+  border-color: #667eea;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.25);
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  color: white;
+  padding: 10px 20px;
+  border-radius: 4px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+}
