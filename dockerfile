@@ -42,9 +42,9 @@ RUN pip install --upgrade pip && \
 # Copy application source code
 COPY server/ ./
 
-# Create directories for uploads and ensure proper permissions
-RUN mkdir -p uploads/images public/images && \
-    chmod 755 uploads public
+# Create directories for static files and ensure proper permissions
+RUN mkdir -p public/images && \
+    chmod 755 public
 
 # Create non-root user for security
 RUN groupadd -r nodeuser && useradd -r -g nodeuser -m -u 1001 nodeuser && \

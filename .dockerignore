@@ -72,8 +72,4 @@ Dockerfile*
 .dockerignore
 
 # Client/Frontend (if building only backend)
-client/
-
-# Uploads directory content (keep structure but not files)
-server/uploads/*
-!server/uploads/.gitkeep 
+client/ 
