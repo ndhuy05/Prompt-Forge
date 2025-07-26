@@ -16,27 +16,56 @@ class SimilarityService {
         try {
             console.log('Initializing Similarity Service...');
             
-            // Try to use Python service first
-            if (this.usePythonService) {
-                console.log('Attempting to use Python FAISS service...');
-                const success = await this.initializePythonService();
-                if (success) {
-                    console.log('Python FAISS service initialized successfully');
-                    this.isInitialized = true;
-                    return;
-                }
-                console.log('Python service failed, falling back to JavaScript...');
+            const isProduction = process.env.NODE_ENV === 'production';
+            
+            if (isProduction) {
+                // PRODUCTION: Use JavaScript Transformers first, then text-based (no Python)
+                console.log('🚀 Production mode: Trying JavaScript Transformers first...');
                 this.usePythonService = false;
+                
+                try {
+                    // Try JavaScript transformers for production
+                    const { pipeline } = await import('@xenova/transformers');
+                    this.pipeline = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
+                    console.log('✅ JavaScript Transformers initialized for production');
+                } catch (jsError) {
+                    console.log('⚠️ JavaScript transformers failed, will use text-based similarity');
+                    this.pipeline = null;
+                }
+                
+                this.isInitialized = true;
+                console.log('✅ Production Similarity Service ready');
+                
+            } else {
+                // DEVELOPMENT: Try Python FAISS first, then JavaScript transformers
+                console.log('🛠️ Development mode: Trying Python FAISS service first...');
+                
+                if (this.usePythonService) {
+                    console.log('Attempting to use Python FAISS service...');
+                    const success = await this.initializePythonService();
+                    if (success) {
+                        console.log('✅ Python FAISS service initialized successfully');
+                        this.isInitialized = true;
+                        return;
+                    }
+                    console.log('⚠️ Python service failed, falling back to JavaScript...');
+                    this.usePythonService = false;
+                }
+                
+                // Fallback to JavaScript implementation for development
+                try {
+                    const { pipeline } = await import('@xenova/transformers');
+                    this.pipeline = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
+                    console.log('✅ JavaScript Similarity Service initialized successfully');
+                } catch (jsError) {
+                    console.log('⚠️ JavaScript transformers failed, will use text-based similarity');
+                }
+                
+                this.isInitialized = true;
             }
             
-            // Fallback to JavaScript implementation
-            const { pipeline } = await import('@xenova/transformers');
-            this.pipeline = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
-            
-            console.log('JavaScript Similarity Service initialized successfully');
-            this.isInitialized = true;
         } catch (error) {
-            console.error('Error initializing Similarity Service:', error);
+            console.error('❌ Error initializing Similarity Service:', error);
             this.isInitialized = false;
         }
     }
@@ -78,20 +107,28 @@ class SimilarityService {
     }
 
     async buildIndex() {
-        try {
-            if (!this.isInitialized) {
-                await this.initialize();
-            }
-
-            if (this.usePythonService) {
-                console.log('Building FAISS index using Python service...');
-                return await this.buildIndexPython();
-            } else {
-                console.log('Building index using JavaScript...');
+        const isProduction = process.env.NODE_ENV === 'production';
+        
+        if (isProduction) {
+            // PRODUCTION: Build JavaScript index if available, otherwise use text-based
+            if (this.pipeline) {
+                console.log('🚀 Production mode: Building JavaScript similarity index...');
                 return await this.buildIndexJS();
+            } else {
+                console.log('🚀 Production mode: Skipping index building, using text-based similarity');
+                return;
             }
-        } catch (error) {
-            console.error('Error building similarity index:', error);
+        }
+        
+        // DEVELOPMENT: Build index if using ML methods
+        if (this.usePythonService) {
+            console.log('Building Python FAISS index...');
+            return await this.buildIndexPython();
+        } else if (this.pipeline) {
+            console.log('Building JavaScript similarity index...');
+            return await this.buildIndexJS();
+        } else {
+            console.log('No ML service available, using text-based similarity');
         }
     }
 
@@ -123,66 +160,50 @@ class SimilarityService {
     }
 
     async buildIndexJS() {
-        // Existing JavaScript implementation
-        if (!this.pipeline) {
-            console.log('Pipeline not available, skipping index build');
-            return;
-        }
+        try {
+            if (!this.pipeline) {
+                console.log('No pipeline available for index building');
+                return false;
+            }
 
-        console.log('Building similarity index...');
-        
-        // Get prompts that are public or undefined (treat undefined as public)
-        const prompts = await Prompt.find({
-            $or: [
-                { isPublic: true },
-                { isPublic: { $exists: false } },
-                { isPublic: { $ne: false } }
-            ]
-        })
-            .select('_id content')
-            .lean();
+            // Get all prompts for indexing
+            const prompts = await Prompt.find({
+                $or: [
+                    { isPublic: true },
+                    { isPublic: { $exists: false } },
+                    { isPublic: { $ne: false } }
+                ]
+            }).select('_id content').lean();
 
-        if (prompts.length === 0) {
-            console.log('No prompts found for indexing');
-            return;
-        }
+            console.log(`Building similarity index for ${prompts.length} prompts...`);
 
-        console.log(`Processing ${prompts.length} prompts for similarity index...`);
-        
-        this.promptEmbeddings.clear();
-        this.promptIds = [];
+            this.promptIds = [];
+            this.promptEmbeddings.clear();
 
-        const batchSize = 10;
-        for (let i = 0; i < prompts.length; i += batchSize) {
-            const batch = prompts.slice(i, i + batchSize);
-            
-            for (const prompt of batch) {
-                try {
-                    // Only use content for embedding
-                    const text = (prompt.content || '').trim();
-                    
-                    // Skip prompts without content
-                    if (!text) {
-                        console.log(`Skipping prompt ${prompt._id} - no content`);
-                        continue;
+            for (const prompt of prompts) {
+                if (prompt.content && prompt.content.trim()) {
+                    try {
+                        // Generate embedding for prompt content
+                        const embedding = await this.pipeline(prompt.content, { 
+                            pooling: 'mean', 
+                            normalize: true 
+                        });
+                        
+                        const vector = Array.from(embedding.data);
+                        this.promptEmbeddings.set(prompt._id.toString(), vector);
+                        this.promptIds.push(prompt._id.toString());
+                    } catch (embeddingError) {
+                        console.error(`Error generating embedding for prompt ${prompt._id}:`, embeddingError);
                     }
-                    const embedding = await this.pipeline(text, { 
-                        pooling: 'mean', 
-                        normalize: true 
-                    });
-                    
-                    this.promptEmbeddings.set(prompt._id.toString(), Array.from(embedding.data));
-                    this.promptIds.push(prompt._id.toString());
-                    
-                } catch (err) {
-                    console.error(`Error processing prompt ${prompt._id}:`, err);
                 }
             }
-            
-            console.log(`Processed ${Math.min(i + batchSize, prompts.length)}/${prompts.length} prompts`);
-        }
 
-        console.log(`Similarity index built with ${this.promptIds.length} prompts`);
+            console.log(`Similarity index built with ${this.promptIds.length} prompts`);
+            return true;
+        } catch (error) {
+            console.error('Error building JavaScript similarity index:', error);
+            return false;
+        }
     }
 
     // Calculate cosine similarity between two vectors
@@ -218,16 +239,40 @@ class SimilarityService {
                 await this.initialize();
             }
 
-            if (this.usePythonService) {
-                console.log('Using Python FAISS service for similarity search...');
-                return await this.findSimilarPromptsPython(targetPrompt, limit);
+            const isProduction = process.env.NODE_ENV === 'production';
+
+            if (isProduction) {
+                // PRODUCTION: Use JavaScript transformers first, then text-based (no Python)
+                console.log('🚀 Production mode: Trying similarity methods...');
+                
+                if (this.pipeline) {
+                    console.log('Using JavaScript transformers for similarity search...');
+                    return await this.findSimilarPromptsJS(targetPrompt, limit);
+                } else {
+                    console.log('Using text-based similarity search...');
+                    return await this.findSimilarPromptsTextBased(targetPrompt, limit);
+                }
+                
             } else {
-                console.log('Using JavaScript service for similarity search...');
-                return await this.findSimilarPromptsJS(targetPrompt, limit);
+                // DEVELOPMENT: Try Python FAISS first, then JavaScript transformers, then text-based
+                console.log('🛠️ Development mode: Trying advanced similarity methods...');
+                
+                if (this.usePythonService) {
+                    console.log('Using Python FAISS service for similarity search...');
+                    return await this.findSimilarPromptsPython(targetPrompt, limit);
+                } else if (this.pipeline) {
+                    console.log('Using JavaScript transformers for similarity search...');
+                    return await this.findSimilarPromptsJS(targetPrompt, limit);
+                } else {
+                    console.log('Using text-based similarity search...');
+                    return await this.findSimilarPromptsTextBased(targetPrompt, limit);
+                }
             }
+            
         } catch (error) {
-            console.error('Error finding similar prompts:', error);
-            // Fallback to text-based similarity
+            console.error('❌ Error finding similar prompts:', error);
+            // Final fallback to text-based similarity
+            console.log('Using final fallback: text-based similarity...');
             return await this.findSimilarPromptsTextBased(targetPrompt, limit);
         }
     }
@@ -268,10 +313,10 @@ class SimilarityService {
                         const lines = output.trim().split('\n');
                         let jsonOutput = '';
                         
-                        // Find the last line that looks like JSON (starts with [ or {)
+                        // Find the last line that looks like JSON (starts with [)
                         for (let i = lines.length - 1; i >= 0; i--) {
                             const line = lines[i].trim();
-                            if (line.startsWith('[') || line.startsWith('{')) {
+                            if (line.startsWith('[')) {
                                 jsonOutput = line;
                                 break;
                             }
@@ -279,50 +324,28 @@ class SimilarityService {
                         
                         if (!jsonOutput) {
                             console.log('No JSON output found from Python service');
-                            resolve([]);
+                            resolve(await this.findSimilarPromptsTextBased(targetPrompt, limit));
                             return;
                         }
                         
                         const similarPrompts = JSON.parse(jsonOutput);
-                        
-                        if (!Array.isArray(similarPrompts)) {
-                            console.log('Python service returned non-array result');
-                            resolve([]);
-                            return;
-                        }
-                        
-                        // Add comments count for each prompt
-                        const Comment = require('../models/commentModel');
-                        const promptsWithStats = await Promise.all(
-                            similarPrompts.map(async (prompt) => {
-                                const commentsCount = await Comment.countDocuments({ prompt: prompt._id });
-                                
-                                return {
-                                    ...prompt,
-                                    commentsCount,
-                                    likesCount: prompt.likes ? prompt.likes.length : 0
-                                };
-                            })
-                        );
-
-                        console.log(`Python service found ${promptsWithStats.length} similar prompts`);
-                        resolve(promptsWithStats);
+                        resolve(similarPrompts || []);
                     } catch (e) {
                         console.error('Error parsing Python output:', e);
                         console.error('Python output:', output);
                         console.error('Python error:', errorOutput);
-                        resolve([]);
+                        resolve(await this.findSimilarPromptsTextBased(targetPrompt, limit));
                     }
                 } else {
                     console.error('Python similarity search failed with code:', code);
                     console.error('Error output:', errorOutput);
-                    resolve([]);
+                    resolve(await this.findSimilarPromptsTextBased(targetPrompt, limit));
                 }
             });
 
-            pythonProcess.on('error', (error) => {
+            pythonProcess.on('error', async (error) => {
                 console.error('Python process error:', error);
-                resolve([]);
+                resolve(await this.findSimilarPromptsTextBased(targetPrompt, limit));
             });
         });
     }
@@ -478,11 +501,6 @@ class SimilarityService {
             console.error('Error in text-based similarity search:', error);
             return [];
         }
-    }
-
-    async rebuildIndex() {
-        console.log('Rebuilding similarity index...');
-        await this.buildIndex();
     }
 }
 
