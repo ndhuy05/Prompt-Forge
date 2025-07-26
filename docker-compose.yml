@@ -11,10 +11,13 @@ services:
       - NODE_ENV=development
       - PORT=5000
       - MONGODB_URI=mongodb://mongodb:27017/promptforce
+      - DB_NAME=promptforce
       - JWT_SECRET=your-local-jwt-secret-key
       - CLIENT_URL=http://localhost:3000
+      - SERVER_URL=http://localhost:5000
+      - GEMINI_API_KEY=AIzaSyCbCVIwSZQaa5jMeFNL0wkepxkDR_o6AtE
+      - BCRYPT_ROUNDS=12
     volumes:
-      - ./server/uploads:/app/uploads
       - ./server/public:/app/public
     depends_on:
       - mongodb

@@ -1,7 +1,9 @@
-torch>=2.5.0
-transformers>=4.40.0
-sentence-transformers>=2.7.0
+# Essential Python dependencies for similarity service only
+# Heavy ML dependencies removed since using Gemini API for summarization
 faiss-cpu>=1.8.0
 numpy>=1.24.3
 pymongo>=4.6.0
 python-dotenv>=1.0.0
+
+# Optional: Keep sentence-transformers for similarity service (lighter than torch+transformers)
+sentence-transformers>=2.7.0

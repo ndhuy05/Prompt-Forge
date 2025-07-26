@@ -1,16 +1,47 @@
 const { spawn } = require('child_process');
 const path = require('path');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 class SummaryService {
     constructor() {
         this.pythonServicePath = path.join(__dirname, '../../python/summarize_service.py');
         this.isInitialized = false;
+        this.geminiInitialized = false;
+        this.genAI = null;
+        this.model = null;
+        
+        // Initialize Gemini AI
+        this.initializeGemini();
+    }
+
+    async initializeGemini() {
+        try {
+            const apiKey = process.env.GEMINI_API_KEY || 'AIzaSyCbCVIwSZQaa5jMeFNL0wkepxkDR_o6AtE';
+            if (apiKey) {
+                this.genAI = new GoogleGenerativeAI(apiKey);
+                this.model = this.genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+                this.geminiInitialized = true;
+                console.log('✅ Gemini AI initialized successfully');
+            } else {
+                console.log('⚠️ No Gemini API key found, will use fallback methods');
+            }
+        } catch (error) {
+            console.error('❌ Error initializing Gemini AI:', error);
+            this.geminiInitialized = false;
+        }
     }
 
     async initialize() {
         try {
             console.log('Initializing Summary Service...');
-            // Test if Python service is available
+            
+            // Check Gemini first (prioritized for deployment)
+            if (this.geminiInitialized) {
+                console.log('✅ Gemini AI service ready');
+                return;
+            }
+            
+            // Fallback to Python service if Gemini not available
             const testResult = await this.testPythonService();
             if (testResult) {
                 console.log('Python Summary service initialized successfully');
@@ -77,16 +108,97 @@ class SummaryService {
                 };
             }
 
-            // Try Python service first
-            if (this.isInitialized) {
-                console.log('Using Python service for description generation...');
-                return await this.generateDescriptionPython(promptContent);
+            const isProduction = process.env.NODE_ENV === 'production';
+
+            if (isProduction) {
+                // PRODUCTION: Prioritize Gemini API for Render deployment
+                console.log('🚀 Production mode: Trying Gemini API first...');
+                
+                if (this.geminiInitialized) {
+                    console.log('Using Gemini AI for description generation...');
+                    return await this.generateDescriptionGemini(promptContent);
+                }
+                
+                // Fallback to Python if Gemini fails
+                if (this.isInitialized) {
+                    console.log('Gemini failed, falling back to Python service...');
+                    return await this.generateDescriptionPython(promptContent);
+                }
+                
             } else {
-                console.log('Python service not available, using fallback...');
-                return this.generateDescriptionFallback(promptContent);
+                // DEVELOPMENT: Prioritize Python/Qwen for local development
+                console.log('🛠️  Development mode: Trying Python/Qwen service first...');
+                
+                if (this.isInitialized) {
+                    console.log('Using Python/Qwen service for description generation...');
+                    return await this.generateDescriptionPython(promptContent);
+                }
+                
+                // Fallback to Gemini if Python not available
+                if (this.geminiInitialized) {
+                    console.log('Python service not available, using Gemini AI...');
+                    return await this.generateDescriptionGemini(promptContent);
+                }
             }
+            
+            // Final fallback for both environments
+            console.log('Using simple fallback method for description generation...');
+            return this.generateDescriptionFallback(promptContent);
+            
         } catch (error) {
             console.error('Error generating description:', error);
+            return this.generateDescriptionFallback(promptContent);
+        }
+    }
+
+    async generateDescriptionGemini(promptContent) {
+        try {
+            const prompt = `Create a concise, professional description (50-150 characters) for this AI prompt. Focus on what it does and how it helps users:
+
+"${promptContent}"
+
+Requirements:
+- Keep it under 150 characters
+- Be clear and professional
+- Highlight the main purpose
+- Avoid technical jargon
+
+Response format: Just return the description text only, no additional formatting.`;
+
+            const result = await this.model.generateContent(prompt);
+            const response = await result.response;
+            let description = response.text().trim();
+            
+            // Clean up the response
+            description = description.replace(/"/g, '');
+            description = description.replace(/^\w+:\s*/, ''); // Remove "Description:" prefix if present
+            
+            // Ensure length constraint
+            if (description.length > 150) {
+                description = description.substring(0, 147) + "...";
+            }
+            
+            if (description.length < 10) {
+                throw new Error('Generated description too short');
+            }
+            
+            console.log('✅ Gemini AI generated description successfully');
+            return {
+                success: true,
+                description: description,
+                source: 'gemini'
+            };
+            
+        } catch (error) {
+            console.error('❌ Gemini AI description generation failed:', error);
+            
+            // Fallback to Python service if available
+            if (this.isInitialized) {
+                console.log('Falling back to Python service...');
+                return await this.generateDescriptionPython(promptContent);
+            }
+            
+            // Final fallback
             return this.generateDescriptionFallback(promptContent);
         }
     }
@@ -138,7 +250,8 @@ class SummaryService {
                             console.log('Python service generated description successfully');
                             resolve({
                                 success: true,
-                                description: result.description
+                                description: result.description,
+                                source: 'python'
                             });
                         } else {
                             console.log('Python service returned unsuccessful result');
@@ -208,14 +321,14 @@ class SummaryService {
             return {
                 success: true,
                 description: description,
-                fallback: true
+                source: 'fallback'
             };
         } catch (error) {
             console.error('Error in fallback description generation:', error);
             return {
                 success: true,
                 description: "A helpful AI prompt for various tasks",
-                fallback: true
+                source: 'fallback'
             };
         }
     }
