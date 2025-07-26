@@ -5,7 +5,6 @@ FROM node:18-slim as base
 RUN apt-get update && apt-get install -y \
     python3 \
     python3-pip \
-    python3-dev \
     python3-venv \
     build-essential \
     curl \
@@ -36,7 +35,7 @@ COPY server/requirements.txt ./
 # Install Node.js dependencies
 RUN npm ci --only=production && npm cache clean --force
 
-# Install Python dependencies (lightweight for production)
+# Install minimal Python dependencies (fallback only)
 RUN pip install --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 

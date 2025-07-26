@@ -19,22 +19,12 @@ class SimilarityService {
             const isProduction = process.env.NODE_ENV === 'production';
             
             if (isProduction) {
-                // PRODUCTION: Use JavaScript Transformers first, then text-based (no Python)
-                console.log('🚀 Production mode: Trying JavaScript Transformers first...');
+                // PRODUCTION: Use text-based similarity only (ultra-lightweight, no blocking)
+                console.log('🚀 Production mode: Using text-based similarity only...');
                 this.usePythonService = false;
-                
-                try {
-                    // Try JavaScript transformers for production
-                    const { pipeline } = await import('@xenova/transformers');
-                    this.pipeline = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
-                    console.log('✅ JavaScript Transformers initialized for production');
-                } catch (jsError) {
-                    console.log('⚠️ JavaScript transformers failed, will use text-based similarity');
-                    this.pipeline = null;
-                }
-                
+                this.pipeline = null;
                 this.isInitialized = true;
-                console.log('✅ Production Similarity Service ready');
+                console.log('✅ Text-based Similarity Service ready for production');
                 
             } else {
                 // DEVELOPMENT: Try Python FAISS first, then JavaScript transformers
@@ -110,14 +100,9 @@ class SimilarityService {
         const isProduction = process.env.NODE_ENV === 'production';
         
         if (isProduction) {
-            // PRODUCTION: Build JavaScript index if available, otherwise use text-based
-            if (this.pipeline) {
-                console.log('🚀 Production mode: Building JavaScript similarity index...');
-                return await this.buildIndexJS();
-            } else {
-                console.log('🚀 Production mode: Skipping index building, using text-based similarity');
-                return;
-            }
+            // PRODUCTION: Skip index building (use text-based similarity only)
+            console.log('🚀 Production mode: Skipping index building, using text-based similarity');
+            return;
         }
         
         // DEVELOPMENT: Build index if using ML methods
@@ -242,16 +227,9 @@ class SimilarityService {
             const isProduction = process.env.NODE_ENV === 'production';
 
             if (isProduction) {
-                // PRODUCTION: Use JavaScript transformers first, then text-based (no Python)
-                console.log('🚀 Production mode: Trying similarity methods...');
-                
-                if (this.pipeline) {
-                    console.log('Using JavaScript transformers for similarity search...');
-                    return await this.findSimilarPromptsJS(targetPrompt, limit);
-                } else {
-                    console.log('Using text-based similarity search...');
-                    return await this.findSimilarPromptsTextBased(targetPrompt, limit);
-                }
+                // PRODUCTION: Use text-based similarity only (ultra-fast)
+                console.log('🚀 Production mode: Using text-based similarity search...');
+                return await this.findSimilarPromptsTextBased(targetPrompt, limit);
                 
             } else {
                 // DEVELOPMENT: Try Python FAISS first, then JavaScript transformers, then text-based
