@@ -1,8 +1,6 @@
 {
   "version": 2,
   "framework": null,
-  "functions": {},
-  "regions": ["iad1"],
   "buildCommand": "npm install && chmod 755 node_modules/.bin/vite && npm run build",
   "outputDirectory": "dist",
   "installCommand": "npm install --production=false",
