@@ -16,55 +16,27 @@ class SimilarityService {
         try {
             console.log('Initializing Similarity Service...');
             
-            const isProduction = process.env.NODE_ENV === 'production';
-            
-            if (isProduction) {
-                // PRODUCTION: Skip Python FAISS, use JavaScript or text-based similarity
-                console.log('🚀 Production mode: Using lightweight similarity methods...');
+            // Try to use Python service first
+            if (this.usePythonService) {
+                console.log('Attempting to use Python FAISS service...');
+                const success = await this.initializePythonService();
+                if (success) {
+                    console.log('Python FAISS service initialized successfully');
+                    this.isInitialized = true;
+                    return;
+                }
+                console.log('Python service failed, falling back to JavaScript...');
                 this.usePythonService = false;
-                
-                try {
-                    // Try JavaScript transformers (lighter than Python FAISS)
-                    const { pipeline } = await import('@xenova/transformers');
-                    this.pipeline = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
-                    console.log('✅ JavaScript Similarity Service initialized for production');
-                } catch (jsError) {
-                    console.log('⚠️ JavaScript transformers failed, will use text-based similarity');
-                    // Text-based similarity will be used as fallback
-                }
-                
-                this.isInitialized = true;
-                
-            } else {
-                // DEVELOPMENT: Prioritize Python FAISS (vector database)
-                console.log('🛠️ Development mode: Trying Python FAISS service first...');
-                
-                if (this.usePythonService) {
-                    console.log('Attempting to use Python FAISS service...');
-                    const success = await this.initializePythonService();
-                    if (success) {
-                        console.log('✅ Python FAISS service initialized successfully');
-                        this.isInitialized = true;
-                        return;
-                    }
-                    console.log('⚠️ Python service failed, falling back to JavaScript...');
-                    this.usePythonService = false;
-                }
-                
-                // Fallback to JavaScript implementation for development
-                try {
-                    const { pipeline } = await import('@xenova/transformers');
-                    this.pipeline = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
-                    console.log('✅ JavaScript Similarity Service initialized successfully');
-                } catch (jsError) {
-                    console.log('⚠️ JavaScript transformers failed, will use text-based similarity');
-                }
-                
-                this.isInitialized = true;
             }
             
+            // Fallback to JavaScript implementation
+            const { pipeline } = await import('@xenova/transformers');
+            this.pipeline = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
+            
+            console.log('JavaScript Similarity Service initialized successfully');
+            this.isInitialized = true;
         } catch (error) {
-            console.error('❌ Error initializing Similarity Service:', error);
+            console.error('Error initializing Similarity Service:', error);
             this.isInitialized = false;
         }
     }
@@ -246,40 +218,16 @@ class SimilarityService {
                 await this.initialize();
             }
 
-            const isProduction = process.env.NODE_ENV === 'production';
-
-            if (isProduction) {
-                // PRODUCTION: Use lightweight methods (no Python FAISS)
-                console.log('🚀 Production mode: Using lightweight similarity search...');
-                
-                if (this.pipeline) {
-                    console.log('Using JavaScript transformers for similarity search...');
-                    return await this.findSimilarPromptsJS(targetPrompt, limit);
-                } else {
-                    console.log('Using text-based similarity search...');
-                    return await this.findSimilarPromptsTextBased(targetPrompt, limit);
-                }
-                
+            if (this.usePythonService) {
+                console.log('Using Python FAISS service for similarity search...');
+                return await this.findSimilarPromptsPython(targetPrompt, limit);
             } else {
-                // DEVELOPMENT: Prioritize Python FAISS (vector database)
-                console.log('🛠️ Development mode: Trying vector database first...');
-                
-                if (this.usePythonService) {
-                    console.log('Using Python FAISS service for similarity search...');
-                    return await this.findSimilarPromptsPython(targetPrompt, limit);
-                } else if (this.pipeline) {
-                    console.log('Using JavaScript transformers for similarity search...');
-                    return await this.findSimilarPromptsJS(targetPrompt, limit);
-                } else {
-                    console.log('Falling back to text-based similarity search...');
-                    return await this.findSimilarPromptsTextBased(targetPrompt, limit);
-                }
+                console.log('Using JavaScript service for similarity search...');
+                return await this.findSimilarPromptsJS(targetPrompt, limit);
             }
-            
         } catch (error) {
-            console.error('❌ Error finding similar prompts:', error);
-            // Final fallback to text-based similarity
-            console.log('Using final fallback: text-based similarity...');
+            console.error('Error finding similar prompts:', error);
+            // Fallback to text-based similarity
             return await this.findSimilarPromptsTextBased(targetPrompt, limit);
         }
     }

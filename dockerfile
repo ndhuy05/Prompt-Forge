@@ -19,10 +19,6 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PIP_NO_CACHE_DIR=1
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1
 
-# Set Node environment variables for production
-ENV NODE_ENV=production
-ENV GEMINI_API_KEY=AIzaSyCbCVIwSZQaa5jMeFNL0wkepxkDR_o6AtE
-
 WORKDIR /app
 
 # Create Python virtual environment
@@ -36,8 +32,11 @@ COPY server/requirements.txt ./
 # Install Node.js dependencies
 RUN npm ci --only=production && npm cache clean --force
 
-# Install Python dependencies (lightweight for production)
+# Install Python dependencies with optimizations
 RUN pip install --upgrade pip && \
+    pip install --no-cache-dir \
+    --index-url https://download.pytorch.org/whl/cpu \
+    torch>=2.5.0 && \
     pip install --no-cache-dir -r requirements.txt
 
 # Copy application source code
