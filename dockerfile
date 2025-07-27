@@ -1,22 +1,10 @@
-# Multi-stage Docker build for optimal size and security
+# Ultra-lightweight Docker build for production (text-based similarity only)
 FROM node:18-slim as base
 
-# Install system dependencies
+# Install minimal system dependencies only
 RUN apt-get update && apt-get install -y \
-    python3 \
-    python3-pip \
-    python3-venv \
-    build-essential \
     curl \
-    wget \
-    && ln -s /usr/bin/python3 /usr/bin/python \
     && rm -rf /var/lib/apt/lists/*
-
-# Set Python environment variables
-ENV PYTHONUNBUFFERED=1
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PIP_NO_CACHE_DIR=1
-ENV PIP_DISABLE_PIP_VERSION_CHECK=1
 
 # Set Node environment variables for production
 ENV NODE_ENV=production
@@ -24,38 +12,28 @@ ENV GEMINI_API_KEY=AIzaSyCbCVIwSZQaa5jMeFNL0wkepxkDR_o6AtE
 
 WORKDIR /app
 
-# Create Python virtual environment
-RUN python3 -m venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
-
 # Copy dependency files first for better Docker layer caching
 COPY server/package*.json ./
-COPY server/requirements.txt ./
 
-# Install Node.js dependencies
+# Install Node.js dependencies only
 RUN npm ci --only=production && npm cache clean --force
-
-# Install minimal Python dependencies (fallback only)
-RUN pip install --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
 
 # Copy application source code
 COPY server/ ./
 
-# Create directories for static files and ensure proper permissions
-RUN mkdir -p public/images && \
-    chmod 755 public
+# Create directories for static files
+RUN mkdir -p public/images
 
 # Create non-root user for security
 RUN groupadd -r nodeuser && useradd -r -g nodeuser -m -u 1001 nodeuser && \
-    chown -R nodeuser:nodeuser /app /opt/venv
+    chown -R nodeuser:nodeuser /app
 USER nodeuser
 
 # Expose port
 EXPOSE 5000
 
 # Add health check
-HEALTHCHECK --interval=30s --timeout=15s --start-period=60s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=15s --start-period=30s --retries=3 \
     CMD curl -f http://localhost:5000/health || exit 1
 
 # Start the application

@@ -19,7 +19,7 @@ class SummaryService {
             const apiKey = process.env.GEMINI_API_KEY || 'AIzaSyCbCVIwSZQaa5jMeFNL0wkepxkDR_o6AtE';
             if (apiKey) {
                 this.genAI = new GoogleGenerativeAI(apiKey);
-                this.model = this.genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+                this.model = this.genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
                 this.geminiInitialized = true;
                 console.log('✅ Gemini AI initialized successfully');
             } else {
