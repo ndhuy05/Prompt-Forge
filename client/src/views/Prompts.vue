@@ -75,13 +75,10 @@
               <button @click="likePrompt(prompt._id)" class="btn-like" :class="{ liked: prompt.isLiked }">
                 👍 {{ prompt.likesCount || prompt.likes?.length || 0 }}
               </button>
-
             </div>
           </div>
         </div>
       </div>
-
-
     </div>
   </div>
 </template>
@@ -173,7 +170,6 @@ export default {
       this.$router.push(`/prompts/${promptId}`)
     },
     
-
     
     searchPrompts() {
       this.fetchPrompts()

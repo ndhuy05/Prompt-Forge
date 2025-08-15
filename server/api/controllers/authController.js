@@ -249,8 +249,6 @@ const changePassword = async (req, res) => {
 // @access  Private
 const logout = async (req, res) => {
     try {
-        // In a real app, you might want to blacklist the token
-        // For now, just send success response
         res.status(200).json({
             success: true,
             message: 'Logged out successfully'

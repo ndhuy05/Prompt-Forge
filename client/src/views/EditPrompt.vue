@@ -110,7 +110,7 @@
                 class="tag"
                 @click="removeTag(tag)"
               >
-                {{ tag }} ×
+                {{ tag }}
               </span>
             </div>
           </div>
